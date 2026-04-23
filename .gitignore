@@ -1,4 +1,6 @@
 /target
 PLAN.md
 CLAUDE.md
+*.ts
+*.m3u8
 .env
