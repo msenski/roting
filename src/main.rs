@@ -92,14 +92,23 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // Create ouput directory for HLS
+    std::fs::create_dir_all("hls_output")?;
+
     // We will take the VideoFrames from the demuxed session and pipe them into
     // the ffmpeg command. The command will be spawned as a child process
     let mut ffmpeg_child = Command::new("ffmpeg")
         .args(["-f", "h264"]) // Input format is rad H.264
+        // TODO: set this dynamically based on camera info
+        .args(["-use_wallclock_as_timestamps", "1"]) // Uses system clock to generate timestamps
         .args(["-i", "pipe:0"]) // read from stdin (pipe number 0)
         .args(["-c", "copy"]) // Don't reencode, repackage (whataver this means)
         .args(["-f", "hls"]) // Output format is HLS
-        .args(["output.m3u8"]) // Write the playlist here
+        .args(["-hls_time", "2"]) // 2 second segments
+        .args(["-hls_list_size", "5"]) // keep only 5 segments in the playlist
+        .args(["-hls_flags", "delete_segments"]) // auto-delete old .ts files so disk doesn't fill up
+        .args(["-hls_segment_filename", "hls_output/output%03d.ts"]) // zero-padded segment names (output001.ts instead of output1.ts)
+        .args(["hls_output/output.m3u8"]) // Write the playlist here
         .stdin(Stdio::piped()) // Create a pipe to the stdin
         .spawn()
         .expect("Failed to spawn child process for ffmpeg");
