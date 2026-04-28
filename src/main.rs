@@ -9,8 +9,11 @@ use retina::codec::CodecItem;
 use retina::codec::FrameFormat;
 use retina::codec::VideoFrame;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tower_http::services::ServeDir;
 use url::Url;
 
+use axum::{Router, routing::get};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -20,6 +23,44 @@ const CAMERA_USER: &str = "CAMERA_USER";
 const CAMERA_PASSWORD: &str = "CAMERA_PASSWORD";
 const CAMERA_IP: &str = "CAMERA_IP";
 const RTSP_PORT: &str = "554";
+const HLS_DIR: &str = "hls_output";
+const STATIC_DIR: &str = "static";
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let (tx, mut rx) = mpsc::channel::<VideoFrame>(100);
+
+    let camera_stream = tokio::spawn(async move {
+        loop {
+            match stream_from_camera(&tx).await {
+                Ok(()) => break, // stream ended
+                Err(e) => {
+                    eprintln!("{e}");
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+            }
+        }
+    });
+
+    let ffmpeg_writer: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
+        match write_to_ffmpeg(&mut rx).await {
+            Ok(()) => {}
+            Err(e) => Err(anyhow!("Encountered error while writing to FFMPEG: {e}"))?,
+        }
+        Ok(())
+    });
+
+    let server: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
+        match serve_web().await {
+            Ok(()) => {}
+            Err(e) => Err(anyhow!("Encountered error while serving: {e}"))?,
+        }
+        Ok(())
+    });
+
+    let _ = tokio::join!(camera_stream, ffmpeg_writer, server);
+    Ok(())
+}
 
 async fn stream_from_camera(tx: &mpsc::Sender<VideoFrame>) -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -76,24 +117,9 @@ async fn stream_from_camera(tx: &mpsc::Sender<VideoFrame>) -> anyhow::Result<()>
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let (tx, mut rx) = mpsc::channel::<VideoFrame>(100);
-
-    let camera_stream = tokio::spawn(async move {
-        loop {
-            match stream_from_camera(&tx).await {
-                Ok(()) => break, // stream ended
-                Err(e) => {
-                    eprintln!("{e}");
-                    tokio::time::sleep(Duration::from_secs(2)).await;
-                }
-            }
-        }
-    });
-
+async fn write_to_ffmpeg(rx: &mut mpsc::Receiver<VideoFrame>) -> anyhow::Result<()> {
     // Create ouput directory for HLS
-    std::fs::create_dir_all("hls_output")?;
+    std::fs::create_dir_all(HLS_DIR)?;
 
     // We will take the VideoFrames from the demuxed session and pipe them into
     // the ffmpeg command. The command will be spawned as a child process
@@ -116,26 +142,31 @@ async fn main() -> anyhow::Result<()> {
     // Create a handle to the child's stdin
     let mut ffmpeg_stdin = ffmpeg_child.stdin.take().unwrap();
 
-    let ffmpeg_writer: tokio::task::JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
-        while let Some(frame) = rx.recv().await {
-            // When you call write_all(bytes), those bytes don't go directly to ffmpeg. They go into a buffer — a small
-            // chunk of memory sitting inside your Rust process. Think of it like a holding tank:
-            //   function                     OS / ffmpeg
-            //   ─────────────────────         ──────────────
-            //   write_all(frame)         →  [buffer: ...bytes...]  →  (not sent yet)
-            //   write_all(frame)         →  [buffer: .........more bytes...]  →  (not sent yet)
-            //   flush()                  →  [buffer empties]  →  bytes finally arrive at ffmpeg
+    while let Some(frame) = rx.recv().await {
+        // When you call write_all(bytes), those bytes don't go directly to ffmpeg. They go into a buffer — a small
+        // chunk of memory sitting inside your Rust process. Think of it like a holding tank:
+        //   function                     OS / ffmpeg
+        //   ─────────────────────         ──────────────
+        //   write_all(frame)         →  [buffer: ...bytes...]  →  (not sent yet)
+        //   write_all(frame)         →  [buffer: .........more bytes...]  →  (not sent yet)
+        //   flush()                  →  [buffer empties]  →  bytes finally arrive at ffmpeg
 
-            // The buffer exists for performance — making a system call to actually send bytes
-            // across a pipe is relatively expensive. Buffering batches many small writes into one big send.
-            ffmpeg_stdin.write_all(frame.data()).await?;
-            ffmpeg_stdin.flush().await?;
-        }
-        Ok(())
-    });
+        // The buffer exists for performance — making a system call to actually send bytes
+        // across a pipe is relatively expensive. Buffering batches many
+        ffmpeg_stdin.write_all(frame.data()).await?;
+        ffmpeg_stdin.flush().await?;
+    }
 
-    // Although the tasks are run immediately when spawn is called, we need
-    // to await them to finish - otherwise our main would exit too early
-    let (_, _) = tokio::join!(camera_stream, ffmpeg_writer);
+    Ok(())
+}
+
+async fn serve_web() -> anyhow::Result<()> {
+    let router = Router::new()
+        .nest_service("/hls", ServeDir::new(HLS_DIR))
+        .fallback_service(ServeDir::new(STATIC_DIR));
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    axum::serve(listener, router).await.unwrap();
+
     Ok(())
 }
