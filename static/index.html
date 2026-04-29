@@ -1,20 +1,30 @@
-  <!DOCTYPE html>                                           
-  <html>
-  <head>                                                                                                     
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>                                                                                                  
-      body { margin: 0; background: black; }                                                               
-      video { width: 100%; height: 100vh; object-fit: contain; }                                             
-    </style>                                                                                                 
-  </head>                                                                                                    
-  <body>                                                                                                     
-    <video id="video" controls autoplay muted playsinline></video>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <script>
-      const video = document.getElementById('video');                                                        
-      const hls = new Hls();
-      hls.loadSource('/hls/output.m3u8');                                                                    
-      hls.attachMedia(video);
-    </script>
-  </body>
-  </html>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin: 0; background: black; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(640px, 100%), 1fr)); }
+    video { width: 100%; height: 100%; aspect-ratio: 16/9; object-fit: contain; display: block; }
+  </style>
+</head>
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    fetch('/cameras')
+      .then(r => r.json())
+      .then(cameras => {
+        cameras.forEach(name => {
+          const video = document.createElement('video');
+          video.controls = true;
+          video.autoplay = true;
+          video.muted = true;
+          video.playsInline = true;
+          document.body.appendChild(video);
+          const hls = new Hls();
+          hls.loadSource(`/hls/${name}/output.m3u8`);
+          hls.attachMedia(video);
+        });
+      });
+  </script>
+</body>
+</html>
