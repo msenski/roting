@@ -54,6 +54,27 @@ async fn main() -> anyhow::Result<()> {
         Ok(())
     });
 
-    let _ = tokio::join!(stream, converter, server);
+    tokio::select! {
+    res = stream => {
+            match res {
+                Ok(_) => println!("Camera stream ended..."),
+                Err(e) => eprintln!("Stream task panicked: {e}")
+            }
+        },
+        res = converter => {
+            match res {
+                Ok(Ok(_)) => {},
+                Ok(Err(e)) => eprintln!("Converter errored: {e}"),
+                Err(e) => eprintln!("Converter task panicked: {e}")
+            }
+        }
+        res = server => {
+            match res {
+                Ok(Ok(_)) => {},
+                Ok(Err(e)) => eprintln!("Server errored: {e}"),
+                Err(e) => eprintln!("Server task panicked: {e}")
+            }}
+
+    }
     Ok(())
 }
