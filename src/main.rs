@@ -9,16 +9,23 @@ use tokio::sync::mpsc;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use clap::Parser;
+
 use camera::Camera;
 use config::Config;
 use hls::FFMpegWriter;
 
 const HLS_BASE_PATH: &str = "hls";
 
+#[derive(Parser)]
+struct Args {
+    #[arg(short, long)]
+    config_path: Option<PathBuf>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // TODO add clap argument parser for program
-    let config = Config::load(Some(PathBuf::new().join("config.toml")))?;
+    let config = Config::load(Args::parse().config_path)?;
 
     let mut task_set = tokio::task::JoinSet::new();
 
