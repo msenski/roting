@@ -10,56 +10,35 @@ use retina::codec::FrameFormat;
 use retina::codec::VideoFrame;
 use tokio::sync::mpsc;
 
-use std::path::PathBuf;
+use crate::config::CameraConfig;
 
 use url::Url;
 
-const CAMERA_USER: &str = "CAMERA_USER";
-const CAMERA_PASSWORD: &str = "CAMERA_PASSWORD";
-const CAMERA_IP: &str = "CAMERA_IP";
 const RTSP_PORT: &str = "554";
 
 pub struct Camera {
-    pub name: String,
-    pub ip: String,
-    pub hls_output_path: PathBuf,
-    user: String,
-    password: String,
+    camera_config: CameraConfig,
 }
 
+// TODO add functionality to move camera etc
 impl Camera {
-    pub fn new() -> anyhow::Result<Self> {
-        // TODO Create camera from config file once we have more cameras
-        dotenvy::dotenv().ok();
-
-        let cam_user = dotenvy::var(CAMERA_USER)?;
-        let cam_pass = dotenvy::var(CAMERA_PASSWORD)?;
-        let cam_ip = dotenvy::var(CAMERA_IP)?;
-
-        let camera_name = "dining-area".to_string();
-        // TODO_CLAUDE: Is the path correctly constructed? And should i clone the name or to_owned()?
-        let output_path = PathBuf::new().join("hls").join(&camera_name);
-
-        Ok(Camera {
-            name: camera_name,
-            ip: cam_ip,
-            hls_output_path: output_path,
-            user: cam_user,
-            password: cam_pass,
-        })
+    pub fn new(camera_config: CameraConfig) -> Self {
+        Camera { camera_config }
     }
 
     pub async fn stream(&self, tx: &mpsc::Sender<VideoFrame>) -> anyhow::Result<()> {
-        let ip = self.ip.clone();
-        let cam_url = Url::parse(format!("rtsp://{ip}:{RTSP_PORT}/stream1").as_str())?;
+        let rtsp_url = Url::parse(&format!(
+            "rtsp://{}:{RTSP_PORT}/stream1",
+            self.camera_config.ip
+        ))?;
 
         let creds = Credentials {
-            username: self.user.clone(),
-            password: self.password.clone(),
+            username: self.camera_config.user.clone(),
+            password: self.camera_config.password.clone(),
         };
 
         let mut session =
-            Session::describe(cam_url, SessionOptions::default().creds(Some(creds))).await?;
+            Session::describe(rtsp_url, SessionOptions::default().creds(Some(creds))).await?;
 
         let video_stream_i = session
             .streams()

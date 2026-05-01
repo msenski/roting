@@ -1,80 +1,59 @@
 mod camera;
+mod config;
 mod hls;
 mod server;
 
-use anyhow::anyhow;
-
 use retina::codec::VideoFrame;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use camera::Camera;
+use config::Config;
 use hls::FFMpegWriter;
+
+const HLS_BASE_PATH: &str = "hls";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let (tx, mut rx) = mpsc::channel::<VideoFrame>(100);
+    // TODO add clap argument parser for program
+    let config = Config::load(Some(PathBuf::new().join("config.toml")))?;
 
-    let camera = Camera::new()?;
+    let mut task_set = tokio::task::JoinSet::new();
 
-    // extract before moving camera to async context
-    let camera_name = camera.name.to_owned();
-    let camera_output_dir = camera.hls_output_path.to_path_buf();
+    // Setup stream and dedicated ffmpg conversion process for each camera
 
-    let stream = tokio::spawn(async move {
-        loop {
-            match camera.stream(&tx).await {
-                Ok(()) => break, // stream ended
-                Err(e) => {
-                    eprintln!("{e}");
-                    tokio::time::sleep(Duration::from_secs(2)).await;
+    for cam_cfg in config.cameras.iter() {
+        let (tx, mut rx) = mpsc::channel::<VideoFrame>(100);
+
+        // TODO_CLAUDE what happens here on cam_cfg.clone()? isn't cam_cfg a reference? (beauce we use .iter()?)
+        let camera = Camera::new(cam_cfg.clone());
+
+        task_set.spawn(async move {
+            loop {
+                match camera.stream(&tx).await {
+                    Ok(()) => break, // stream ended
+                    Err(e) => {
+                        eprintln!("{e}");
+                        tokio::time::sleep(Duration::from_secs(2)).await;
+                    }
                 }
             }
-        }
-    });
+            Ok(())
+        });
 
-    let ffmpeg = FFMpegWriter {
-        hls_output_dir: camera_output_dir.clone(),
-    };
-    let converter: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
-        match ffmpeg.write_hls(&mut rx).await {
-            Ok(()) => {}
-            Err(e) => Err(anyhow!("Encountered error while writing to FFMPEG: {e}"))?,
-        }
-        Ok(())
-    });
-
-    let server: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
-        match server::serve(&[(camera_name, camera_output_dir)]).await {
-            Ok(()) => {}
-            Err(e) => Err(anyhow!("Encountered error while serving: {e}"))?,
-        }
-        Ok(())
-    });
-
-    tokio::select! {
-    res = stream => {
-            match res {
-                Ok(_) => println!("Camera stream ended..."),
-                Err(e) => eprintln!("Stream task panicked: {e}")
-            }
-        },
-        res = converter => {
-            match res {
-                Ok(Ok(_)) => {},
-                Ok(Err(e)) => eprintln!("Converter errored: {e}"),
-                Err(e) => eprintln!("Converter task panicked: {e}")
-            }
-        }
-        res = server => {
-            match res {
-                Ok(Ok(_)) => {},
-                Ok(Err(e)) => eprintln!("Server errored: {e}"),
-                Err(e) => eprintln!("Server task panicked: {e}")
-            }}
-
+        let ffmpeg = FFMpegWriter {
+            hls_output_dir: PathBuf::new().join(HLS_BASE_PATH).join(&cam_cfg.name),
+        };
+        task_set.spawn(async move { ffmpeg.write_hls(&mut rx).await });
     }
+
+    task_set.spawn(async move { server::serve(&config).await });
+
+    // TODO_CLAUDE How to return the error properly, will it be silenced now?
+    if let Some(result) = task_set.join_next().await {
+        result??
+    };
     Ok(())
 }
