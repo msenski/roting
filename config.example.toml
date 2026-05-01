@@ -1,0 +1,7 @@
+  server_port = "3000"                                                                                       
+                                                                                                             
+  [[cameras]]
+  name = "front-door"                                                                                        
+  ip = "192.168.1.x"                                                                                         
+  user = "admin"
+  password = "yourpassword"

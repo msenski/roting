@@ -1,6 +1,9 @@
 /target
 PLAN.md
+DEPLOYMENT.md
+CONCURRENCY.md
 CLAUDE.md
+config.toml
 *.ts
 *.m3u8
 .env
