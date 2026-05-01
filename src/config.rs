@@ -20,7 +20,10 @@ pub struct Config {
 impl Config {
     pub fn load(config_path: Option<PathBuf>) -> anyhow::Result<Self> {
         let path = config_path.unwrap_or_else(|| {
-            dirs::config_dir().expect("Could not determine system's default config directory")
+            dirs::config_dir().expect(
+                "Could not determine system's default config directory. \
+       Try providing an explicit path with --config-path (-c)",
+            )
         });
 
         let contents = std::fs::read_to_string(path)?;
