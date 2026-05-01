@@ -27,7 +27,6 @@ async fn main() -> anyhow::Result<()> {
     for cam_cfg in config.cameras.iter() {
         let (tx, mut rx) = mpsc::channel::<VideoFrame>(100);
 
-        // TODO_CLAUDE what happens here on cam_cfg.clone()? isn't cam_cfg a reference? (beauce we use .iter()?)
         let camera = Camera::new(cam_cfg.clone());
 
         task_set.spawn(async move {
@@ -51,7 +50,6 @@ async fn main() -> anyhow::Result<()> {
 
     task_set.spawn(async move { server::serve(&config).await });
 
-    // TODO_CLAUDE How to return the error properly, will it be silenced now?
     if let Some(result) = task_set.join_next().await {
         result??
     };
