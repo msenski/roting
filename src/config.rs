@@ -31,3 +31,52 @@ impl Config {
         Ok(toml::from_str(&contents)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn parses_valid_config() {
+        let toml = r#"
+            server_port = "3000"
+            [[cameras]]
+            name = "front-door"
+            ip = "192.168.1.1"
+            user = "admin"
+            password = "secret"
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.cameras.len(), 1);
+        assert_eq!(config.cameras[0].name, "front-door");
+    }
+
+    #[test]
+    fn parses_multiple_cameras() {
+        let toml = r#"                                                                                         
+          server_port = "3000"
+          [[cameras]]                                                                                        
+          name = "front-door"                                                                                
+          ip = "192.168.1.1"
+          user = "admin"                                                                                     
+          password = "secret"
+          [[cameras]]                                                                                        
+          name = "garden"
+          ip = "192.168.1.2"                                                                                 
+          user = "admin"
+          password = "secret"
+      "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.cameras.len(), 2);
+    }
+
+    #[test]
+    fn rejects_missing_field() {
+        let toml = r#"
+            [[cameras]]
+            name = "front-door"
+        "#; // missing ip, user, password, server_port
+        assert!(toml::from_str::<Config>(toml).is_err());
+    }
+}
