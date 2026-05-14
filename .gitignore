@@ -1,7 +1,5 @@
 /target
-PLAN.md
-DEPLOYMENT.md
-CONCURRENCY.md
+/notes
 CLAUDE.md
 config.toml
 *.ts

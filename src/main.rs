@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
     for cam_cfg in config.cameras.iter() {
         let (tx, mut rx) = mpsc::channel::<VideoFrame>(100);
 
-        let camera = Camera::new(cam_cfg.clone());
+        let camera = Camera::new(cam_cfg.clone())?;
 
         task_set.spawn(async move {
             loop {

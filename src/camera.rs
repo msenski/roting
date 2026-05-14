@@ -11,34 +11,44 @@ use retina::codec::VideoFrame;
 use tokio::sync::mpsc;
 
 use crate::config::CameraConfig;
+use crate::config::Vendor;
 
 use url::Url;
 
-const RTSP_PORT: &str = "554";
+const RTSP_PORT: u16 = 554;
+
+fn rtsp_path(vendor: &Vendor) -> &'static str {
+    match vendor {
+        Vendor::Tapo => "stream1",
+        Vendor::Reolink => "h264Preview_01_main",
+    }
+}
 
 pub struct Camera {
     camera_config: CameraConfig,
+    rtsp_url: Url,
 }
 
 // TODO add functionality to move camera etc
 impl Camera {
-    pub fn new(camera_config: CameraConfig) -> Self {
-        Camera { camera_config }
+    pub fn new(camera_config: CameraConfig) -> anyhow::Result<Self> {
+        let rtsp_url = Url::parse(&format!(
+            "rtsp://{}:{RTSP_PORT}/{}",
+            camera_config.ip,
+            rtsp_path(&camera_config.vendor),
+        ))?;
+
+        Ok(Camera { camera_config, rtsp_url })
     }
 
     pub async fn stream(&self, tx: &mpsc::Sender<VideoFrame>) -> anyhow::Result<()> {
-        let rtsp_url = Url::parse(&format!(
-            "rtsp://{}:{RTSP_PORT}/stream1",
-            self.camera_config.ip
-        ))?;
-
         let creds = Credentials {
             username: self.camera_config.user.clone(),
             password: self.camera_config.password.clone(),
         };
 
         let mut session =
-            Session::describe(rtsp_url, SessionOptions::default().creds(Some(creds))).await?;
+            Session::describe(self.rtsp_url.clone(), SessionOptions::default().creds(Some(creds))).await?;
 
         let video_stream_i = session
             .streams()
@@ -76,5 +86,20 @@ impl Camera {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tapo_uses_stream1() {
+        assert_eq!(rtsp_path(&Vendor::Tapo), "stream1");
+    }
+
+    #[test]
+    fn reolink_uses_h264_main_stream() {
+        assert_eq!(rtsp_path(&Vendor::Reolink), "h264Preview_01_main");
     }
 }
