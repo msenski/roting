@@ -4,7 +4,15 @@ use serde::Deserialize;
 use toml;
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Vendor {
+    Tapo,
+    Reolink,
+}
+
+#[derive(Clone, Deserialize)]
 pub struct CameraConfig {
+    pub vendor: Vendor,
     pub name: String,
     pub ip: String,
     pub user: String,
@@ -42,6 +50,7 @@ mod tests {
         let toml = r#"
             server_port = "3000"
             [[cameras]]
+            vendor = "tapo"
             name = "front-door"
             ip = "192.168.1.1"
             user = "admin"
@@ -56,14 +65,16 @@ mod tests {
     fn parses_multiple_cameras() {
         let toml = r#"                                                                                         
           server_port = "3000"
-          [[cameras]]                                                                                        
-          name = "front-door"                                                                                
+          [[cameras]]
+          vendor = "tapo"
+          name = "front-door"
           ip = "192.168.1.1"
-          user = "admin"                                                                                     
+          user = "admin"
           password = "secret"
-          [[cameras]]                                                                                        
+          [[cameras]]
+          vendor = "reolink"
           name = "garden"
-          ip = "192.168.1.2"                                                                                 
+          ip = "192.168.1.2"
           user = "admin"
           password = "secret"
       "#;
@@ -71,12 +82,33 @@ mod tests {
         assert_eq!(config.cameras.len(), 2);
     }
 
+        #[test]
+    fn rejects_unknown_vendor() {
+        let toml = r#"                                                                                         
+          server_port = "3000"
+          [[cameras]]
+          vendor = "Tapo"
+          name = "front-door"
+          ip = "192.168.1.1"
+          user = "admin"
+          password = "secret"
+          [[cameras]]
+          vendor = "neolink"
+          name = "garden"
+          ip = "192.168.1.2"
+          user = "admin"
+          password = "secret"
+      "#;
+        assert!(toml::from_str::<Config>(toml).is_err());
+
+    }
+
     #[test]
     fn rejects_missing_field() {
         let toml = r#"
             [[cameras]]
             name = "front-door"
-        "#; // missing ip, user, password, server_port
+        "#; // missing vendor, ip, user, password, server_port
         assert!(toml::from_str::<Config>(toml).is_err());
     }
 }
