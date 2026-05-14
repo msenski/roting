@@ -1,0 +1,14 @@
+[Unit]
+Description=Rioting RTSP --> HLS security camera server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+ExecStart=/usr/local/bin/rioting -c /home/ubuntu/config.toml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
