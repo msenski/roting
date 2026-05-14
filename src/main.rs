@@ -2,6 +2,7 @@ mod camera;
 mod config;
 mod hls;
 mod server;
+mod tapo;
 
 use retina::codec::VideoFrame;
 use tokio::sync::mpsc;
@@ -11,9 +12,9 @@ use std::time::Duration;
 
 use clap::Parser;
 
-use camera::Camera;
 use config::Config;
 use hls::FFMpegWriter;
+use tapo::Camera;
 
 const HLS_BASE_PATH: &str = "hls";
 

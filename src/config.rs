@@ -82,7 +82,7 @@ mod tests {
         assert_eq!(config.cameras.len(), 2);
     }
 
-        #[test]
+    #[test]
     fn rejects_unknown_vendor() {
         let toml = r#"                                                                                         
           server_port = "3000"
@@ -100,7 +100,6 @@ mod tests {
           password = "secret"
       "#;
         assert!(toml::from_str::<Config>(toml).is_err());
-
     }
 
     #[test]
