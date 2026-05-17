@@ -98,7 +98,9 @@ impl OnvifClient {
             </tptz:Velocity>
         </tptz:ContinuousMove>
         "#,
-            token = &self.profile_token, pan=pan, tilt=tilt
+            token = &self.profile_token,
+            pan = pan,
+            tilt = tilt
         );
 
         let request = build_soap_envelope(&self.camera_config, body);
@@ -277,10 +279,7 @@ fn find_xaddr(doc: &roxmltree::Document, service: &str) -> anyhow::Result<String
 
 fn check_soap_fault(response: &str) -> anyhow::Result<()> {
     let doc = roxmltree::Document::parse(response)?;
-    if let Some(fault) = doc
-        .descendants()
-        .find(|n| n.tag_name().name() == "Fault")
-    {
+    if let Some(fault) = doc.descendants().find(|n| n.tag_name().name() == "Fault") {
         let reason = fault
             .descendants()
             .find(|n| n.tag_name().name() == "Text")

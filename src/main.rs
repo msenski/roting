@@ -2,15 +2,12 @@ mod camera;
 mod config;
 mod hls;
 mod onvif;
-mod reolink;
 mod server;
 mod streamer;
-mod tapo;
 
 use retina::codec::VideoFrame;
 use tokio::sync::mpsc;
 
-use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -19,12 +16,8 @@ use clap::Parser;
 use config::Config;
 use hls::FFMpegWriter;
 
-use crate::camera::Camera;
-use crate::config::Vendor;
-use crate::onvif::OnvifClient;
-use crate::reolink::ReolinkCamera;
+use crate::camera::OnvifCamera;
 use crate::streamer::Streamer;
-use crate::tapo::TapoCamera;
 
 const HLS_BASE_PATH: &str = "hls";
 
@@ -45,18 +38,12 @@ async fn main() -> anyhow::Result<()> {
     for cam_cfg in config.cameras.iter() {
         let (tx, mut rx) = mpsc::channel::<VideoFrame>(100);
 
-        let camera: Box<dyn Camera> = match cam_cfg.vendor {
-            Vendor::Tapo => Box::new(TapoCamera::new(cam_cfg.clone())?),
-            Vendor::Reolink => Box::new(ReolinkCamera::new(cam_cfg.clone())?),
-        };
+        let camera: OnvifCamera = OnvifCamera::connect(cam_cfg.clone()).await?;
         let streamer = Streamer::new(
             camera.rtsp_url().clone(),
             cam_cfg.user.clone(),
             cam_cfg.password.clone(),
         );
-
-        // TODO remove just testing
-        let client = OnvifClient::connect(cam_cfg.clone()).await?;
 
         task_set.spawn(async move {
             loop {

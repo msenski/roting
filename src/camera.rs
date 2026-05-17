@@ -1,20 +1,38 @@
-use async_trait::async_trait;
-
 use url::Url;
 
-#[async_trait]
-pub trait Camera {
-    /// Returns the RTSP URL used to connect to this camera's video stream.
-    fn rtsp_url(&self) -> &Url;
+use crate::config::CameraConfig;
+use crate::onvif::OnvifClient;
 
-    /// Moves the camera continuously at the given velocity.
-    ///
-    /// `pan`: -1.0 (full left) to 1.0 (full right), 0.0 = no horizontal movement.
-    /// `tilt`: -1.0 (full down) to 1.0 (full up), 0.0 = no vertical movement.
-    ///
-    /// Movement continues until [`Camera::ptz_stop`] is called.
-    async fn ptz_move(&self, pan: f32, tilt: f32) -> anyhow::Result<()>;
+pub struct OnvifCamera {
+    rtsp_url: Url,
+    onvif_client: OnvifClient,
+}
 
-    /// Stops all pan/tilt movement immediately.
-    async fn ptz_stop(&self) -> anyhow::Result<()>;
+impl OnvifCamera {
+    pub async fn connect(config: CameraConfig) -> anyhow::Result<Self> {
+        let rtsp_url = Url::parse(&format!(
+            "rtsp://{}:554/{}",
+            config.ip,
+            config.vendor.rtsp_path()
+        ))?;
+        let onvif = OnvifClient::connect(config).await?;
+        Ok(OnvifCamera {
+            rtsp_url,
+            onvif_client: onvif,
+        })
+    }
+}
+
+impl OnvifCamera {
+    pub fn rtsp_url(&self) -> &Url {
+        &self.rtsp_url
+    }
+
+    async fn ptz_move(&self, pan: f32, tilt: f32) -> anyhow::Result<()> {
+        self.onvif_client.ptz_move(pan, tilt).await
+    }
+
+    async fn ptz_stop(&self) -> anyhow::Result<()> {
+        self.onvif_client.ptz_stop().await
+    }
 }

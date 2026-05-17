@@ -17,6 +17,13 @@ impl Vendor {
             Vendor::Reolink => 8000,
         }
     }
+
+    pub fn rtsp_path(&self) -> &str {
+        match self {
+            Vendor::Tapo => "stream1",
+            Vendor::Reolink => "h264Preview_01_main",
+        }
+    }
 }
 
 #[derive(Clone, Deserialize)]
