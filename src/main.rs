@@ -8,7 +8,9 @@ mod streamer;
 use retina::codec::VideoFrame;
 use tokio::sync::mpsc;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
@@ -33,12 +35,15 @@ async fn main() -> anyhow::Result<()> {
 
     let mut task_set = tokio::task::JoinSet::new();
 
-    // Setup stream and dedicated ffmpg conversion process for each camera
+    let mut cameras: HashMap<String, Arc<OnvifCamera>> = HashMap::new();
 
+    // Setup stream and dedicated ffmpg conversion process for each camera
     for cam_cfg in config.cameras.iter() {
         let (tx, mut rx) = mpsc::channel::<VideoFrame>(100);
 
-        let camera: OnvifCamera = OnvifCamera::connect(cam_cfg.clone()).await?;
+        let camera = Arc::new(OnvifCamera::connect(cam_cfg.clone()).await?);
+        cameras.insert(cam_cfg.name.clone(), camera.clone());
+
         let streamer = Streamer::new(
             camera.rtsp_url().clone(),
             cam_cfg.user.clone(),
@@ -64,7 +69,8 @@ async fn main() -> anyhow::Result<()> {
         task_set.spawn(async move { ffmpeg.write_hls(&mut rx).await });
     }
 
-    task_set.spawn(async move { server::serve(&config).await });
+    let cameras = Arc::new(cameras);
+    task_set.spawn(async move { server::serve(&config, cameras).await });
 
     if let Some(result) = task_set.join_next().await {
         result??

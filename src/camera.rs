@@ -28,11 +28,11 @@ impl OnvifCamera {
         &self.rtsp_url
     }
 
-    async fn ptz_move(&self, pan: f32, tilt: f32) -> anyhow::Result<()> {
+    pub async fn ptz_move(&self, pan: f32, tilt: f32) -> anyhow::Result<()> {
         self.onvif_client.ptz_move(pan, tilt).await
     }
 
-    async fn ptz_stop(&self) -> anyhow::Result<()> {
+    pub async fn ptz_stop(&self) -> anyhow::Result<()> {
         self.onvif_client.ptz_stop().await
     }
 }

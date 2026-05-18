@@ -62,7 +62,6 @@ const NS_PTZ: &str = "http://www.onvif.org/ver20/ptz/wsdl";
 pub struct OnvifClient {
     client: reqwest::Client,
     camera_config: CameraConfig,
-    media_service_url: String,
     ptz_service_url: String,
     profile_token: String,
 }
@@ -78,7 +77,6 @@ impl OnvifClient {
         Ok(OnvifClient {
             client,
             camera_config,
-            media_service_url,
             ptz_service_url,
             profile_token,
         })
